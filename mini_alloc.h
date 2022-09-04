@@ -34,50 +34,69 @@ class MemoryManager {
     void memory_alloc(std::size_t init_size) {
         assert(init_size > 0);
         auto ceil_size = ceil_divide(init_size, PAGE_SIZE) * PAGE_SIZE;
-        auto cur = &dummy;
-        while (cur->next_free != nullptr) {
-            cur = cur->next_free;
-        }
-        cur->next_free = new PieceNode{new char[ceil_size], ceil_size, nullptr, nullptr};
-
+        auto node = new PieceNode{new char[ceil_size], ceil_size, dummy.next_free, dummy.next_allocated};
+        dummy.next_free = node;
     }
 
-    PieceNode *find_fit_node(std::size_t size) {
+    PieceNode *pick_fit_node(std::size_t size) {
         assert(size > 0);
         auto ceil_size = ceil_divide(size, MIN_UNIT) * MIN_UNIT;
-        auto cur = &dummy;
-        while (cur->next_free != nullptr) {
-            cur = cur->next_free;
-            if (cur->size >= ceil_size) {
-                break;
-            }
+        auto prev = &dummy;
+        auto curr = prev->next_free;
+
+        while (curr != nullptr && curr->size < size) {
+            prev = curr;
+            curr = prev->next_free;
         }
 
-        if (cur->size < ceil_size) {
-            return nullptr;
+        if (curr == nullptr) {
+            memory_alloc(ceil_size);
+            return pick_fit_node(ceil_size);
         } else {
-            cur->size -= ceil_size;
-            auto node = new PieceNode{cur->data + cur->size, ceil_size, cur->next_free, cur->next_allocated};
-            cur->next_allocated = node;
-            return node;
+            if (curr->size == ceil_size) {
+                prev->next_free = curr->next_free;
+                curr->next_free = nullptr;
+                prev->next_allocated = curr;
+                return curr;
+            } else {
+                auto node = new PieceNode{curr->data + curr->size - ceil_size, ceil_size, nullptr,
+                                          curr->next_allocated};
+                curr->size -= ceil_size;
+                curr->next_allocated = node;
+                return node;
+            }
         }
     }
 
     PieceNode *pick_in_allocated(void *data, PieceNode *last_free) {
         auto prev = last_free;
         auto curr = last_free->next_allocated;
-
         while (curr != nullptr && curr->data != data) {
             prev = curr;
             curr = curr->next_allocated;
         }
+
         if (curr == nullptr) {
             return nullptr;
         } else {
-            prev->next_allocated = curr->next_allocated;
+            prev->next_allocated = nullptr;
             return curr;
         }
     }
+
+    static void try_merge(PieceNode *node1, PieceNode *node2) {
+        if (node1 == nullptr || node2 == nullptr) {
+            return;
+        }
+        if (node1->data + node1->size == node2->data) {
+            // no need to check if node1->next_allocated == nullptr
+            node1->next_free = node2->next_free;
+            node1->next_allocated = node2->next_allocated;
+            node1->size += node2->size;
+            delete node2;
+        }
+    }
+
 
     void do_dealloc(void *data) {
         auto curr = &dummy;
@@ -87,6 +106,8 @@ class MemoryManager {
                 if (res != nullptr) {
                     res->next_free = curr->next_free;
                     curr->next_free = res;
+                    try_merge(curr, res);
+                    try_merge(res, res->next_free);
                     return;
                 }
             }
@@ -149,7 +170,7 @@ class MemoryManager {
 
 
 public:
-    MemoryManager(std::size_t init_size)
+    explicit MemoryManager(std::size_t init_size)
             : dummy{nullptr, 0, nullptr, nullptr} {
         if (init_size > 0) {
             memory_alloc(init_size);
@@ -161,7 +182,7 @@ public:
             return nullptr;
         }
 
-        auto node = find_fit_node(sz);
+        auto node = pick_fit_node(sz);
         return node == nullptr ? nullptr : node->data;
     }
 
@@ -178,16 +199,22 @@ public:
 
 
     static void test() {
-        MemoryManager manager(6000);
-        manager.visualize();
-        auto a = manager.alloc(1231);
-        manager.visualize();
-        auto b = manager.alloc(123);
-        manager.visualize();
-        manager.dealloc(a);
-        manager.visualize();
-        manager.dealloc(b);
-        manager.visualize();
+#define Init(initsize) MemoryManager manager(initsize); manager.visualize()
+#define Alloc(size) manager.alloc(size); manager.visualize()
+#define Free(data) manager.dealloc(data); manager.visualize()
+
+        Init(6000);
+
+        auto b = Alloc(331);
+        auto a = Alloc(124);
+        Free(a);
+        auto e = Alloc(1025);
+        auto c = Alloc(854);
+        auto d = Alloc(532);
+        Free(d);
+        Free(e);
+        Free(b);
+
     }
 };
 
