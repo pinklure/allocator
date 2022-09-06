@@ -28,7 +28,7 @@ struct PieceNode {
     PieceNode *next_allocated;
 };
 
-class MemoryManager {
+class MiniAlloc {
     PieceNode dummy;
 
     void memory_alloc(std::size_t init_size) {
@@ -68,7 +68,7 @@ class MemoryManager {
         }
     }
 
-    PieceNode *pick_in_allocated(void *data, PieceNode *last_free) {
+    static PieceNode *pick_in_allocated(void *data, PieceNode *last_free) {
         auto prev = last_free;
         auto curr = last_free->next_allocated;
         while (curr != nullptr && curr->data != data) {
@@ -170,7 +170,7 @@ class MemoryManager {
 
 
 public:
-    explicit MemoryManager(std::size_t init_size)
+    explicit MiniAlloc(std::size_t init_size)
             : dummy{nullptr, 0, nullptr, nullptr} {
         if (init_size > 0) {
             memory_alloc(init_size);
@@ -199,7 +199,7 @@ public:
 
 
     static void test() {
-#define Init(initsize) MemoryManager manager(initsize); manager.visualize()
+#define Init(initsize) MiniAlloc manager(initsize); manager.visualize()
 #define Alloc(size) manager.alloc(size); manager.visualize()
 #define Free(data) manager.dealloc(data); manager.visualize()
 
